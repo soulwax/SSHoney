@@ -1,0 +1,25 @@
+Solaris SMF installation
+========================
+
+Before installing SMF:
+
+1. Put sshoney binary to /usr/local/bin
+2. Edit sshoney.conf and put it to /usr/local/etc
+
+To install SMF:
+
+1. Put sshoney.xml to /var/svc/manifest/network
+2. Run svccfg import sshoney.xml
+3. Put init.sshoney to /lib/svc/method
+4. Run svcadm enable sshoney
+
+Note: Log will write to /var/log/sshoney.log by default.
+
+To uninstall SMF:
+
+1. Run svcadm disable sshoney
+2. rm -f /lib/svc/method/init.sshoney
+3. svccfg delete svc:/network/sshoney:default
+4. rm -f /var/svc/manifest/network/sshoney.xml
+
+Enjoy! :)
