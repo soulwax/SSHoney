@@ -176,6 +176,7 @@ In a new terminal window, make an SSH connection to
 the port 22 with either of the following commands:
 `ssh username@your_server_ip -v`
 `ssh username@your_server_ip -p 22 -v`
+For configuration, end sshoney session with ctrl+c.
 
 ## 3. Configuring SShoney
 
