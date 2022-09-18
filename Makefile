@@ -6,16 +6,16 @@ LDFLAGS  = -ggdb3
 LDLIBS   =
 PREFIX   = /usr/local
 
-all: endlessh
+all: sshoney
 
-endlessh: endlessh.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ endlessh.c $(LDLIBS)
+sshoney: sshoney.c
+	$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ sshoney.c $(LDLIBS)
 
-install: endlessh
+install: sshoney
 	install -d $(DESTDIR)$(PREFIX)/bin
-	install -m 755 endlessh $(DESTDIR)$(PREFIX)/bin/
+	install -m 755 sshoney $(DESTDIR)$(PREFIX)/bin/
 	install -d $(DESTDIR)$(PREFIX)/share/man/man1
-	install -m 644 endlessh.1 $(DESTDIR)$(PREFIX)/share/man/man1/
+	install -m 644 sshoney.1 $(DESTDIR)$(PREFIX)/share/man/man1/
 
 clean:
-	rm -rf endlessh
+	rm -rf sshoney

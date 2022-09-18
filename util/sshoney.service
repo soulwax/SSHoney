@@ -1,13 +1,13 @@
 [Unit]
-Description=Endlessh SSH Tarpit
-Documentation=man:endlessh(1)
+Description=SSHONEY SSH Tarpit
+Documentation=man:sshoney(1)
 Requires=network-online.target
 
 [Service]
 Type=simple
 Restart=always
 RestartSec=30sec
-ExecStart=/usr/local/bin/endlessh
+ExecStart=/usr/local/bin/sshoney
 KillSignal=SIGTERM
 
 # Stop trying to restart the service if it restarts too many times in a row
@@ -24,16 +24,16 @@ ProtectSystem=full
 ProtectHome=true
 InaccessiblePaths=/run /var
 
-## If you want Endlessh to bind on ports < 1024
+## If you want SSHONEY to bind on ports < 1024
 ## 1) run: 
-##     setcap 'cap_net_bind_service=+ep' /usr/local/bin/endlessh
+##     setcap 'cap_net_bind_service=+ep' /usr/local/bin/sshoney
 ## 2) uncomment following line
 #AmbientCapabilities=CAP_NET_BIND_SERVICE
 ## 3) comment following line
 PrivateUsers=true
 
 NoNewPrivileges=true
-ConfigurationDirectory=endlessh
+ConfigurationDirectory=sshoney
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
