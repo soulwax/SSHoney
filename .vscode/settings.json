@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.md": "markdown",
+        "html": "html",
+        "time.h": "c"
+    }
+}

@@ -575,7 +575,7 @@ usage(FILE *f)
 static void
 print_version(void)
 {
-    puts("SSHONEY " XSTR(SSHONEY_VERSION));
+    puts("SSHoney " XSTR(SSHONEY_VERSION));
 }
 
 static int
