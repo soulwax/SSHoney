@@ -234,15 +234,15 @@ If started successfully, you will see an output like this:
 
 ```
 ● sshoney.service - SSHoney SSH Tarpit
-Loaded: loaded (/etc/systemd/system/sshoney.service; enabled; vendor preset: enabled)
-Active: active (running) since Sun 2022-09-18 18:55:39 CEST; 8s ago
-Docs: man:sshoney(1)
-Main PID: 4203 (sshoney)
-Tasks: 1 (limit: 19118)
-Memory: 428.0K
-CPU: 70ms
-CGroup: /system.slice/sshoney.service
-└─4203 /usr/local/bin/sshoney
+    Loaded: loaded (/etc/systemd/system/sshoney.service; enabled; vendor preset: enabled)
+    Active: active (running) since Sun 2022-09-18 18:55:39 CEST; 8s ago
+    Docs: man:sshoney(1)
+    Main PID: 4203 (sshoney)
+    Tasks: 1 (limit: 19118)
+    Memory: 428.0K
+    CPU: 70ms
+    CGroup: /system.slice/sshoney.service
+    └─4203 /usr/local/bin/sshoney
 ```
 
 If it is running, you can attempt to connect on port 22 in a new terminal session:
