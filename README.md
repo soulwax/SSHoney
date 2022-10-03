@@ -164,8 +164,8 @@ Once verified the new port works, you can close your original terminal safely.
 
 `git clone --recursive https://github.com/soulwax/sshoney`
 `cd sshoney`
-`make`
 `sudo apt install build-essential libc6-dev`
+`make`
 Start ssh now:
 `sudo ./sshoney -v -p 22`
 
