@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# File: util/pivot.py
 
 # This script accepts a log on standard input and produces a CSV table
 # with one connection per row.

@@ -1,3 +1,5 @@
+-- File: util/schema.sql
+
 CREATE TABLE IF NOT EXISTS log (
     host TEXT,
     port INTEGER,

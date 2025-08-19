@@ -1,4 +1,5 @@
 #!/sbin/sh
+# File: util/smf/init.sshoney
 
 #
 # Control Method for sshoney (/lib/svc/method/init.sshoney)

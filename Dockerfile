@@ -1,3 +1,5 @@
+# File: Dockerfile
+
 FROM alpine:3.9 as builder
 RUN apk add --no-cache build-base
 ADD sshoney.c Makefile /
