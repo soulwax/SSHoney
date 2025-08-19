@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
 # File: util/pivot.py
-
-# This script accepts a log on standard input and produces a CSV table
-# with one connection per row.
-#
-#   $ util/pivot.py <log | sqlite3 -init util/schema.sql log.db
-
 import sys
 import pyrfc3339
 

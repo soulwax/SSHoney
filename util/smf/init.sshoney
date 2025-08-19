@@ -1,14 +1,5 @@
 #!/sbin/sh
 # File: util/smf/init.sshoney
-
-#
-# Control Method for sshoney (/lib/svc/method/init.sshoney)
-# Written by Yuri Voinov (C) 2007,2019
-#
-# ident "@(#)sshoney.sh    1.8    19/27/03 YV"
-#
-
-#############
 # Variables #
 #############
 
