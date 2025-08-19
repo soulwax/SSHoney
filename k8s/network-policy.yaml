@@ -1,0 +1,22 @@
+# File: k8s/network-policy.yaml
+# k8s/network-policy.yaml
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sshoney-netpol
+  namespace: sshoney
+spec:
+  podSelector:
+    matchLabels:
+      app: sshoney
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 2222
+  egress:
+    - {} # Allow all egress for now, restrict as needed

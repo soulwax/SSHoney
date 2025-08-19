@@ -1,0 +1,16 @@
+# File: k8s/configmap.yaml
+# k8s/configmap.yaml
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sshoney-config
+  namespace: sshoney
+data:
+  config: |
+    Port 2222
+    Delay 10000
+    MaxLineLength 32
+    MaxClients 4096
+    LogLevel 1
+    BindFamily 0

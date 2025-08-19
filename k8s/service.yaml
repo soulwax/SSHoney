@@ -1,0 +1,22 @@
+# File: k8s/service.yaml
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: sshoney-service
+  namespace: sshoney
+  labels:
+    app: sshoney
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 22
+      targetPort: 2222
+      protocol: TCP
+      name: ssh-tarpit
+  selector:
+    app: sshoney
+  sessionAffinity: None
