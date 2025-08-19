@@ -1,0 +1,9 @@
+# File: ansible/templates/sshoney.conf.j2
+
+# SSHoney Configuration
+Port {{ tarpit_port }}
+Delay {{ sshoney_delay | default(10000) }}
+MaxLineLength {{ sshoney_max_line_length | default(32) }}
+MaxClients {{ sshoney_max_clients | default(4096) }}
+LogLevel {{ sshoney_log_level | default(1) }}
+BindFamily {{ sshoney_bind_family | default(0) }}

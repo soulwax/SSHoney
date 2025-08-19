@@ -1,0 +1,65 @@
+# File: ansible/templates/sshoney.service.j2
+
+[Unit]
+Description=SSHoney SSH Tarpit
+Documentation=man:sshoney(1)
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User={{ sshoney_user }}
+Group={{ sshoney_group }}
+ExecStart=/usr/local/bin/sshoney -f {{ sshoney_config_dir }}/config -s
+ExecReload=/bin/kill -HUP $MAINPID
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# Capabilities
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Directories
+ConfigurationDirectory=sshoney
+StateDirectory=sshoney
+LogsDirectory=sshoney
+RuntimeDirectory=sshoney
+WorkingDirectory={{ sshoney_home }}
+
+# Environment
+Environment=TZ=UTC
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sshoney
+
+[Install]
+WantedBy=multi-user.target

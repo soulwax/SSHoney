@@ -1,0 +1,12 @@
+{{ sshoney_log_dir }}/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 {{ sshoney_user }} {{ sshoney_group }}
+    postrotate
+        /bin/systemctl reload sshoney > /dev/null 2>&1 || true
+    endscript
+}

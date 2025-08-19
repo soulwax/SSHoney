@@ -1,0 +1,289 @@
+# File: ansible/playbook.yml
+
+- name: Deploy SSHoney Honeypot
+  hosts: sshoney_servers
+  become: true
+  vars:
+    sshoney_user: sshoney
+    sshoney_group: sshoney
+    sshoney_home: /var/lib/sshoney
+    sshoney_config_dir: /etc/sshoney
+    sshoney_log_dir: /var/log/sshoney
+    ssh_port: 2222
+    tarpit_port: 22
+    sshoney_version: latest
+
+  pre_tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Update package cache (RedHat)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+  tasks:
+    - name: Install required packages (Debian/Ubuntu)
+      apt:
+        name:
+          - build-essential
+          - libc6-dev
+          - libcap2-bin
+          - git
+          - fail2ban
+          - ufw
+          - netcat-openbsd
+          - htop
+          - iotop
+          - tcpdump
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install required packages (CentOS/RHEL)
+      yum:
+        name:
+          - gcc
+          - glibc-devel
+          - libcap
+          - git
+          - fail2ban
+          - firewalld
+          - nmap-ncat
+          - htop
+          - iotop
+          - tcpdump
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Create sshoney system group
+      group:
+        name: "{{ sshoney_group }}"
+        state: present
+        system: yes
+
+    - name: Create sshoney system user
+      user:
+        name: "{{ sshoney_user }}"
+        group: "{{ sshoney_group }}"
+        home: "{{ sshoney_home }}"
+        shell: /bin/false
+        system: yes
+        create_home: yes
+        state: present
+
+    - name: Create sshoney directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ sshoney_user }}"
+        group: "{{ sshoney_group }}"
+        mode: "0750"
+      loop:
+        - "{{ sshoney_home }}"
+        - "{{ sshoney_log_dir }}"
+
+    - name: Create config directory
+      file:
+        path: "{{ sshoney_config_dir }}"
+        state: directory
+        owner: root
+        group: "{{ sshoney_group }}"
+        mode: "0755"
+
+    - name: Clone SSHoney repository
+      git:
+        repo: https://github.com/soulwax/sshoney.git
+        dest: /tmp/sshoney
+        version: "{{ sshoney_version }}"
+        force: yes
+      register: git_clone
+
+    - name: Build SSHoney with security flags
+      command: >
+        make clean && make
+        CFLAGS="-std=c99 -Wall -Wextra -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 -fPIE"
+        LDFLAGS="-Wl,-z,relro,-z,now -pie"
+      args:
+        chdir: /tmp/sshoney
+      when: git_clone.changed or force_rebuild | default(false)
+
+    - name: Install SSHoney binary
+      copy:
+        src: /tmp/sshoney/sshoney
+        dest: /usr/local/bin/sshoney
+        owner: root
+        group: root
+        mode: "0755"
+        remote_src: yes
+      notify: restart sshoney
+
+    - name: Set capabilities for binding to privileged ports
+      capabilities:
+        path: /usr/local/bin/sshoney
+        capability: cap_net_bind_service+ep
+        state: present
+
+    - name: Template SSHoney configuration
+      template:
+        src: sshoney.conf.j2
+        dest: "{{ sshoney_config_dir }}/config"
+        owner: root
+        group: "{{ sshoney_group }}"
+        mode: "0644"
+      notify: reload sshoney
+
+    - name: Template systemd service file
+      template:
+        src: sshoney.service.j2
+        dest: /etc/systemd/system/sshoney.service
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - reload systemd
+        - restart sshoney
+
+    - name: Configure SSH daemon port
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?Port\s+'
+        line: "Port {{ ssh_port }}"
+        backup: yes
+      notify: restart sshd
+
+    - name: Configure SSH security settings
+      blockinfile:
+        path: /etc/ssh/sshd_config
+        block: |
+          # Security hardening
+          PermitRootLogin no
+          PasswordAuthentication no
+          ChallengeResponseAuthentication no
+          UsePAM yes
+          X11Forwarding no
+          PrintMotd no
+          ClientAliveInterval 300
+          ClientAliveCountMax 2
+          MaxAuthTries 3
+          MaxSessions 2
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - SSH Security"
+      notify: restart sshd
+
+    - name: Configure fail2ban for SSH
+      template:
+        src: jail.local.j2
+        dest: /etc/fail2ban/jail.local
+        owner: root
+        group: root
+        mode: "0644"
+      notify: restart fail2ban
+
+    - name: Configure UFW firewall (Debian/Ubuntu)
+      block:
+        - name: Allow SSH on custom port
+          ufw:
+            rule: allow
+            port: "{{ ssh_port }}"
+            proto: tcp
+            comment: "SSH Management"
+
+        - name: Allow SSHoney tarpit
+          ufw:
+            rule: allow
+            port: "{{ tarpit_port }}"
+            proto: tcp
+            comment: "SSHoney Tarpit"
+
+        - name: Enable UFW
+          ufw:
+            state: enabled
+            policy: deny
+            direction: incoming
+      when: ansible_os_family == "Debian"
+
+    - name: Configure firewalld (CentOS/RHEL)
+      block:
+        - name: Allow SSH on custom port
+          firewalld:
+            port: "{{ ssh_port }}/tcp"
+            permanent: yes
+            state: enabled
+
+        - name: Allow SSHoney tarpit
+          firewalld:
+            port: "{{ tarpit_port }}/tcp"
+            permanent: yes
+            state: enabled
+
+        - name: Reload firewalld
+          service:
+            name: firewalld
+            state: reloaded
+      when: ansible_os_family == "RedHat"
+
+    - name: Create log rotation configuration
+      template:
+        src: sshoney.logrotate.j2
+        dest: /etc/logrotate.d/sshoney
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install monitoring script
+      template:
+        src: sshoney-monitor.sh.j2
+        dest: /usr/local/bin/sshoney-monitor.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create monitoring cron job
+      cron:
+        name: "SSHoney monitoring"
+        minute: "*/5"
+        job: "/usr/local/bin/sshoney-monitor.sh"
+        user: root
+        state: present
+
+    - name: Enable and start services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      loop:
+        - sshoney
+        - fail2ban
+
+    - name: Cleanup build directory
+      file:
+        path: /tmp/sshoney
+        state: absent
+
+  handlers:
+    - name: reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: restart sshoney
+      systemd:
+        name: sshoney
+        state: restarted
+
+    - name: reload sshoney
+      systemd:
+        name: sshoney
+        state: reloaded
+
+    - name: restart sshd
+      systemd:
+        name: sshd
+        state: restarted
+
+    - name: restart fail2ban
+      systemd:
+        name: fail2ban
+        state: restarted

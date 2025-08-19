@@ -1,5 +1,4 @@
 # File: k8s/network-policy.yaml
-# k8s/network-policy.yaml
 
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

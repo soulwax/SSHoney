@@ -1,5 +1,4 @@
 # File: k8s/pod-security-policy.yaml
-# k8s/pod-security-policy.yaml
 
 apiVersion: policy/v1beta1
 kind: PodSecurityPolicy

@@ -1,0 +1,22 @@
+# File: ansible/group_vars/all.yml
+
+# Global variables for all hosts
+sshoney_version: main
+force_rebuild: false
+sshoney_delay: 10000
+sshoney_max_line_length: 32
+sshoney_max_clients: 4096
+sshoney_log_level: 1
+sshoney_bind_family: 0
+
+# Security settings
+ssh_port: 2222
+tarpit_port: 22
+
+# Monitoring
+alert_email: ""
+
+# Package management
+package_update_cache: true
+install_monitoring: true
+install_fail2ban: true

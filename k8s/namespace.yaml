@@ -1,5 +1,4 @@
 # File: k8s/namespace.yaml
-# k8s/namespace.yaml
 
 apiVersion: v1
 kind: Namespace

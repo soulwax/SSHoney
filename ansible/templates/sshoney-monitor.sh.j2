@@ -1,0 +1,86 @@
+#!/bin/bash
+# File: ansible/templates/sshoney-monitor.sh.j2
+set -euo pipefail
+
+# Configuration
+SSHONEY_USER="{{ sshoney_user }}"
+LOG_DIR="{{ sshoney_log_dir }}"
+CONFIG_FILE="{{ sshoney_config_dir }}/config"
+ALERT_EMAIL="${alert_email | default('') }"
+STATS_FILE="/tmp/sshoney-stats.txt"
+
+# Functions
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') $*" | logger -t sshoney-monitor
+}
+
+check_service() {
+    if ! systemctl is-active --quiet sshoney; then
+        log "ERROR: SSHoney service is not running"
+        systemctl restart sshoney
+        return 1
+    fi
+    return 0
+}
+
+check_port() {
+    if ! nc -z localhost {{ tarpit_port }}; then
+        log "ERROR: SSHoney port {{ tarpit_port }} is not accessible"
+        return 1
+    fi
+    return 0
+}
+
+check_disk_space() {
+    local usage=$(df {{ sshoney_log_dir }} | awk 'NR==2 {print $5}' | tr -d '%')
+    if [ "$usage" -gt 90 ]; then
+        log "WARNING: Log directory is ${usage}% full"
+        return 1
+    fi
+    return 0
+}
+
+generate_stats() {
+    local today=$(date '+%Y-%m-%d')
+    local connections_today=0
+    
+    if [ -f "${LOG_DIR}/sshoney.log" ]; then
+        connections_today=$(grep "$today" "${LOG_DIR}/sshoney.log" | grep -c "ACCEPT" || true)
+    fi
+    
+    cat > "$STATS_FILE" << EOF
+SSHoney Statistics - $(date)
+==============================
+Service Status: $(systemctl is-active sshoney)
+Connections Today: $connections_today
+Disk Usage: $(df -h $LOG_DIR | awk 'NR==2 {print $5}')
+Memory Usage: $(ps -o pid,ppid,cmd,%mem,%cpu --sort=-%mem -C sshoney | head -2 | tail -1 | awk '{print $4"%"}')
+Uptime: $(systemctl show sshoney --property=ActiveEnterTimestamp --value)
+EOF
+    
+    log "Generated statistics: $connections_today connections today"
+}
+
+# Main execution
+main() {
+    local errors=0
+    
+    check_service || ((errors++))
+    check_port || ((errors++))
+    check_disk_space || ((errors++))
+    
+    generate_stats
+    
+    if [ $errors -gt 0 ]; then
+        log "Monitor check completed with $errors errors"
+        if [ -n "$ALERT_EMAIL" ]; then
+            mail -s "SSHoney Alert on $(hostname)" "$ALERT_EMAIL" < "$STATS_FILE"
+        fi
+        exit 1
+    else
+        log "Monitor check passed"
+        exit 0
+    fi
+}
+
+main "$@"

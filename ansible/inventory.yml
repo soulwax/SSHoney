@@ -1,0 +1,20 @@
+# File: ansible/inventory.yml
+
+all:
+  children:
+    sshoney_servers:
+      hosts:
+        honeypot-01:
+          ansible_host: 192.168.1.100
+          ansible_user: admin
+          ansible_ssh_private_key_file: ~/.ssh/honeypot_key
+        honeypot-02:
+          ansible_host: 192.168.1.101
+          ansible_user: admin
+          ansible_ssh_private_key_file: ~/.ssh/honeypot_key
+      vars:
+        sshoney_delay: 15000
+        sshoney_max_clients: 2048
+        ssh_port: 2222
+        tarpit_port: 22
+        alert_email: admin@example.com

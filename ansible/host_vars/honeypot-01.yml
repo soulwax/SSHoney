@@ -1,0 +1,6 @@
+# File: ansible/host_vars/honeypot-01.yml
+
+# Specific configuration for honeypot-01
+sshoney_max_clients: 8192
+sshoney_delay: 5000
+alert_email: honeypot-01@example.com

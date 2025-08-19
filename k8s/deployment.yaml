@@ -1,5 +1,4 @@
 # File: k8s/deployment.yaml
-# k8s/deployment.yaml
 
 apiVersion: apps/v1
 kind: Deployment
