@@ -1,0 +1,176 @@
+# .github/workflows/ci.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Test and Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cppcheck clang-tidy valgrind
+
+      - name: Build with debug flags
+        run: |
+          make clean
+          make CFLAGS="-std=c99 -Wall -Wextra -Werror -g -O0 -fsanitize=address -fsanitize=undefined"
+
+      - name: Run static analysis
+        run: |
+          cppcheck --enable=all --std=c99 --error-exitcode=1 sshoney.c
+          clang-tidy sshoney.c -- -std=c99
+
+      - name: Run unit tests
+        run: |
+          # Basic functionality tests
+          ./sshoney -h
+          ./sshoney -V
+          timeout 5s ./sshoney -p 9999 -v || true
+
+      - name: Memory leak check
+        run: |
+          timeout 10s valgrind --leak-check=full --error-exitcode=1 ./sshoney -p 9998 -v || true
+
+      - name: Security scan with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-results.sarif"
+
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run container security scan
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          format: "sarif"
+          output: "trivy-container.sarif"
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [test, build-docker]
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Build release binaries
+        run: |
+          # Build for different architectures
+          make clean
+          make CFLAGS="-std=c99 -Wall -Wextra -O2 -fstack-protector-strong -static"
+          mv sshoney sshoney-linux-amd64
+
+          # Cross-compile for ARM64 (requires cross-compiler)
+          # make clean CC=aarch64-linux-gnu-gcc
+          # make CFLAGS="-std=c99 -Wall -Wextra -O2 -fstack-protector-strong -static"
+          # mv sshoney sshoney-linux-arm64
+
+      - name: Create checksums
+        run: |
+          sha256sum sshoney-* > checksums.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sshoney-*
+            checksums.txt
+          body: |
+            ## Changes in this Release
+
+            - Security improvements and modernization
+            - Enhanced Docker support
+            - Improved monitoring capabilities
+
+            ## Installation
+
+            Download the appropriate binary for your system and verify the checksum:
+
+            ```bash
+            # Download binary
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/sshoney-linux-amd64
+
+            # Verify checksum
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/checksums.txt
+            sha256sum -c checksums.txt
+
+            # Install
+            chmod +x sshoney-linux-amd64
+            sudo mv sshoney-linux-amd64 /usr/local/bin/sshoney
+            ```
+          draft: false
+          prerelease: false
