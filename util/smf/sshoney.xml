@@ -1,6 +1,7 @@
 <?xml version="1.0"?>
 <!DOCTYPE service_bundle SYSTEM "/usr/share/lib/xml/dtd/service_bundle.dtd.1">
 <!-- File: util/smf/sshoney.xml -->
+<!--   Manifest-file for sshoney, put this file in
        /var/svc/manifest/network/sshoney.xml
        and run #svccfg import /var/svc/manifest/network/sshoney.xml
        Fixed by Yuri Voinov (C) 2007,2019 -->

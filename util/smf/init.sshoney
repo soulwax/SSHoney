@@ -1,9 +1,5 @@
 #!/sbin/sh
 # File: util/smf/init.sshoney
-# Variables #
-#############
-
-# Base installation directory
 BASE_DIR="/usr/local"
 BASE_CONFIG_DIR=$BASE_DIR"/etc"
 
