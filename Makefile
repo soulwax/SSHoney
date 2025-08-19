@@ -1,3 +1,5 @@
+# File: Makefile
+
 .POSIX:
 
 # Compiler and flags

@@ -11,7 +11,7 @@ If you want to cover both IPv4 and IPv6 you'll need to run _two_ instances of
   - use `BindFamily 6` in `config6`
 - in `rc.conf.local` force `sshoney6` to load `config6` like so:
 
-```
+```conf
 sshoney6_flags=-s -f /etc/sshoney/config6
 sshoney_flags=-s
 ```
@@ -24,11 +24,11 @@ something like 124 clients at the most.
 You can increase these limits in `/etc/login.conf` for `sshoney` (and
 `sshoney6`) like so:
 
-```
+```conf
 sshoney:\
-	:openfiles=1024:\
-	:tc=daemon:
+ :openfiles=1024:\
+ :tc=daemon:
 sshoney6:\
-	:openfiles=1024:\
-	:tc=daemon:
+ :openfiles=1024:\
+ :tc=daemon:
 ```

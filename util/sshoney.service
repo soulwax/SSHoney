@@ -1,44 +1,65 @@
 [Unit]
-Description=SSHONEY SSH Tarpit
+Description=SSHoney SSH Tarpit
 Documentation=man:sshoney(1)
-Requires=network-online.target
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
-Restart=always
-RestartSec=30sec
-ExecStart=/usr/local/bin/sshoney
+User=sshoney
+Group=sshoney
+ExecStart=/usr/local/bin/sshoney -f /etc/sshoney/config -s
+ExecReload=/bin/kill -HUP $MAINPID
 KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+RestartSec=10
 
-# Stop trying to restart the service if it restarts too many times in a row
-StartLimitInterval=5min
-StartLimitBurst=4
-
-StandardOutput=journal
-StandardError=journal
-StandardInput=null
-
+# Security settings
+NoNewPrivileges=true
 PrivateTmp=true
 PrivateDevices=true
-ProtectSystem=full
+ProtectSystem=strict
 ProtectHome=true
-InaccessiblePaths=/run /var
-
-## If you want SSHONEY to bind on ports < 1024
-## 1) run: 
-##     setcap 'cap_net_bind_service=+ep' /usr/local/bin/sshoney
-## 2) uncomment following line
-#AmbientCapabilities=CAP_NET_BIND_SERVICE
-## 3) comment following line
-PrivateUsers=true
-
-NoNewPrivileges=true
-ConfigurationDirectory=sshoney
 ProtectKernelTunables=true
 ProtectKernelModules=true
+ProtectKernelLogs=true
 ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RemoveIPC=true
+LockPersonality=true
 MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+SystemCallArchitectures=native
+
+# Allow binding to privileged ports
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# Directories
+ConfigurationDirectory=sshoney
+StateDirectory=sshoney
+LogsDirectory=sshoney
+RuntimeDirectory=sshoney
+
+# Working directory
+WorkingDirectory=/var/lib/sshoney
+
+# Environment
+Environment=TZ=UTC
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sshoney
 
 [Install]
 WantedBy=multi-user.target
-

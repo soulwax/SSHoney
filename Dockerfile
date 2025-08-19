@@ -1,6 +1,6 @@
 # File: Dockerfile
-
 # Modern multi-stage Dockerfile with security hardening
+
 FROM alpine:3.19 as builder
 
 # Install build dependencies

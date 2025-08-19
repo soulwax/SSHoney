@@ -1,6 +1,5 @@
 #!/bin/bash
-# Modern SSHoney deployment script for Linux distributions
-
+# File: deploy.sh
 set -euo pipefail
 
 # Configuration
