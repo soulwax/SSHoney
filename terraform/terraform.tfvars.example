@@ -1,0 +1,33 @@
+# File: terraform/terraform.tfvars.example
+# Copy this file to terraform.tfvars and customize
+
+aws_region    = "us-west-2"
+project_name  = "sshoney"
+environment   = "production"
+
+# Network configuration
+vpc_cidr = "10.0.0.0/16"
+public_subnet_cidrs = [
+  "10.0.1.0/24",
+  "10.0.2.0/24"
+]
+
+# Instance configuration
+instance_type = "t3.micro"
+min_instances = 2
+max_instances = 6
+desired_instances = 3
+
+# SSH configuration
+ssh_port = 2222
+
+# Security - IMPORTANT: Restrict this to your IP ranges!
+admin_cidrs = [
+  "203.0.113.0/24"  # Replace with your actual IP range
+]
+
+# SSH Public Key - Replace with your actual public key
+public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC... your-email@domain.com"
+
+# Logging
+log_retention_days = 30
