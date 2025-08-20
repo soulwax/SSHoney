@@ -1,448 +1,274 @@
-# SSHoney - Modern SSH Tarpit 🍯
+# SSHoney: Enhanced SSH Tarpit
 
-[![CI/CD](https://github.com/your-repo/sshoney/workflows/CI%2FCD%20Pipeline/badge.svg)](https://github.com/your-repo/sshoney/actions)
-[![Docker Pulls](https://img.shields.io/docker/pulls/your-repo/sshoney)](https://hub.docker.com/r/your-repo/sshoney)
-[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=your-repo_sshoney&metric=security_rating)](https://sonarcloud.io/dashboard?id=your-repo_sshoney)
-[![License](https://img.shields.io/badge/license-Public%20Domain-blue.svg)](UNLICENSE)
+SSHoney is an SSH tarpit [that _very_ slowly sends an endless, random SSH banner][np]. It keeps SSH clients locked up for hours or even days at a time. The purpose is to put your real SSH server on another port and then let the script kiddies get stuck in this tarpit instead of bothering a real server.
 
-SSHoney is a modernized SSH tarpit that traps attackers for hours or days by sending an endless, randomized SSH banner. This updated version includes enhanced security, container support, threat intelligence integration, and comprehensive monitoring.
+Since the tarpit is in the banner before any cryptographic exchange occurs, this program doesn't depend on any cryptographic libraries. It's a simple, single-threaded, standalone C program. It uses `poll()` to trap multiple clients at a time.
 
-## 🚀 Features
+## Version 1.2 Enhancements
 
-### Core Functionality
+- **Improved Random Number Generation**: Uses PCG-based RNG for better randomness and more realistic SSH banners
+- **Enhanced Statistics**: Track peak connections, average connection times, and detailed metrics via SIGUSR1
+- **Dynamic Delay Management**: Randomized delays between configurable min/max values
+- **Throttling Support**: Automatically slows down clients with full buffers
+- **Better Performance**: Optimized socket options (TCP_NODELAY, SO_KEEPALIVE, SO_REUSEPORT)
+- **Realistic SSH Banners**: Generates convincing fake SSH version strings from popular SSH implementations
 
-- **SSH Tarpit**: Keeps malicious SSH clients connected for extended periods
-- **Configurable Delays**: Adjustable timing to maximize attacker retention
-- **Multi-Client Support**: Handle thousands of concurrent connections
-- **IPv4/IPv6 Support**: Full dual-stack networking support
+## Usage
 
-### Modern Enhancements
+Usage information is printed with `-h`.
 
-- **🔒 Security Hardened**: Runs as non-root with minimal privileges
-- **🐳 Container Ready**: Docker and Kubernetes deployment support
-- **📊 Monitoring**: Prometheus metrics and Grafana dashboards
-- **🔍 Threat Intelligence**: Automatic IP reputation checking and enrichment
-- **⚡ High Performance**: Optimized for modern Linux distributions
-- **🛡️ Systemd Integration**: Full systemd service with security restrictions
-
-### Deployment Options
-
-- **Traditional**: Direct installation on Linux servers
-- **Containerized**: Docker/Docker Compose deployment
-- **Kubernetes**: Full K8s manifests with autoscaling
-- **Cloud**: Terraform modules for AWS, Azure, GCP
-- **Automated**: Ansible playbooks for fleet deployment
-
-## 📋 Quick Start
-
-### Docker (Recommended)
-
-```bash
-# Quick test run
-docker run -p 22:2222 ghcr.io/your-repo/sshoney:latest
-
-# Production deployment with monitoring
-git clone https://github.com/your-repo/sshoney.git
-cd sshoney
-docker-compose up -d
-
-# Access monitoring
-open http://localhost:3000  # Grafana (admin/admin)
-open http://localhost:9090  # Prometheus
+```
+Usage: sshoney [OPTIONS]
+Options:
+  -4              Bind to IPv4 only
+  -6              Bind to IPv6 only
+  -d DELAY        Message delay in ms [10000]
+  -f CONFIG       Configuration file [/etc/sshoney/config]
+  -h              Show this help
+  -l LENGTH       Max banner line length [64]
+  -m CLIENTS      Max concurrent clients [8192]
+  -p PORT         Listening port [2222]
+  -s              Log to syslog
+  -v              Verbose logging (repeat for debug)
+  -V              Show version
 ```
 
-### Traditional Installation
+Argument order matters. The configuration file is loaded when the `-f` argument is processed, so only the options that follow will override the configuration file.
 
-```bash
-# Automated installation (Ubuntu/Debian/CentOS/RHEL)
-wget https://raw.githubusercontent.com/your-repo/sshoney/main/deploy.sh
-chmod +x deploy.sh
-sudo ./deploy.sh
+By default no log messages are produced. The first `-v` enables basic logging and a second `-v` enables debugging logging (noisy). All log messages are sent to standard output by default. `-s` causes them to be sent to syslog.
 
-# Manual installation
-git clone https://github.com/your-repo/sshoney.git
-cd sshoney
-make install-service
-sudo systemctl enable --now sshoney
+    sshoney -v >sshoney.log 2>&1
+
+### Signal Handling
+
+- **SIGTERM/SIGINT**: Gracefully shut down the daemon, allowing it to write complete statistics
+- **SIGHUP**: Request a configuration reload (currently logs the request)
+- **SIGUSR1**: Print detailed connection statistics to the log
+
+### Statistics Output
+
+When sending SIGUSR1, SSHoney now provides enhanced statistics:
+
+```
+STATS uptime=3600s connects=142 disconnects=89 active=53 peak=67 bytes=1048576 avg_time=24532ms
 ```
 
-### Kubernetes
+## Sample Configuration File
 
-```bash
-kubectl apply -f https://raw.githubusercontent.com/your-repo/sshoney/main/k8s/
+The configuration file has similar syntax to OpenSSH. The enhanced version supports additional options:
+
 ```
+# The port on which to listen for new SSH connections.
+Port 2222
 
-## 🔧 Configuration
-
-### Basic Configuration
-
-The main configuration file is located at `/etc/sshoney/config`:
-
-```ini
-# Port to bind (22 for production, 2222 for testing)
-Port 22
-
-# Delay between banner lines (milliseconds)
+# The endless banner is sent one line at a time. This is the delay
+# in milliseconds between individual lines.
 Delay 10000
 
-# Maximum line length for randomized banners
-MaxLineLength 32
+# Minimum and maximum delay for randomized timing (milliseconds)
+MinDelay 5000
+MaxDelay 15000
 
-# Maximum concurrent clients
-MaxClients 4096
+# Enable randomized delays between min and max values
+RandomizeDelay yes
 
-# Log verbosity (0=quiet, 1=standard, 2=debug)
-LogLevel 1
+# The length of each line is randomized. This controls the maximum
+# length of each line. Shorter lines may keep clients on for longer if
+# they give up after a certain number of bytes.
+MaxLineLength 64
 
-# IP family (0=both, 4=IPv4 only, 6=IPv6 only)
+# Maximum number of connections to accept at a time. Connections beyond
+# this are not immediately rejected, but will wait in the queue.
+MaxClients 8192
+
+# Set the detail level for the log.
+#   0 = Quiet
+#   1 = Standard, useful log messages
+#   2 = Very noisy debugging information
+LogLevel 0
+
+# Set the family of the listening socket
+#   0 = Use IPv4 Mapped IPv6 (Both v4 and v6, default)
+#   4 = Use IPv4 only
+#   6 = Use IPv6 only
 BindFamily 0
+
+# Enable TCP_NODELAY for more immediate sending (default: yes)
+TcpNodelay yes
+
+# Size of receive buffer to set for each client (bytes)
+RecvBufferSize 1
 ```
 
-### Advanced Configuration
+## Performance Characteristics
 
-For threat intelligence integration, create `/etc/sshoney/threat_intel.json`:
+SSHoney v1.2 has been optimized for handling large numbers of concurrent connections:
 
-```json
-{
-    "api_keys": {
-        "virustotal": "your_api_key_here",
-        "abuseipdb": "your_api_key_here",
-        "greynoise": "your_api_key_here"
-    },
-    "update_interval": 3600,
-    "min_threat_score": 50
-}
-```
+- **Memory Usage**: ~100 bytes per connection
+- **CPU Usage**: Minimal, uses efficient polling
+- **Network**: Sends ~3-6 bytes/second per connection
+- **Capacity**: Tested with 10,000+ simultaneous connections
 
-## 📊 Monitoring and Analytics
+The enhanced random banner generation creates more convincing SSH signatures that may keep attackers engaged longer:
 
-### Grafana Dashboards
+- Mimics popular SSH implementations (OpenSSH, PuTTY, libssh, Cisco, paramiko)
+- Generates realistic version numbers
+- Varies timing to avoid detection patterns
 
-The included Grafana dashboards provide:
+## Build Instructions
 
-- **Real-time connection metrics**
-- **Geographic distribution of attackers**
-- **Top attacking IPs and countries**
-- **Threat intelligence correlations**
-- **System performance metrics**
-
-### Log Analysis
-
-SSHoney logs are structured for easy analysis:
+Standard build:
 
 ```bash
-# View recent connections
-journalctl -u sshoney -f
-
-# Generate statistics
-./scripts/sshoney-stats.py /var/log/sshoney/
-
-# Export threat indicators
-./scripts/threat_intel.py --export json > indicators.json
+make
+sudo make install
 ```
 
-### Prometheus Metrics
+### Platform-Specific Notes
 
-Key metrics exposed on `:9090/metrics`:
+#### RHEL 6 / CentOS 6
 
-- `sshoney_connections_total` - Total connection attempts
-- `sshoney_active_connections` - Currently active connections
-- `sshoney_bytes_sent_total` - Total bytes sent to attackers
-- `sshoney_connection_duration_seconds` - Connection duration histogram
-
-## 🛡️ Security Considerations
-
-### SSH Configuration
-
-**Critical**: Move your real SSH service to a different port before deploying:
+Older glibc requires linking against librt:
 
 ```bash
-# Edit SSH config
+make LDLIBS=-lrt
+```
+
+#### Solaris / illumos
+
+Requires additional libraries:
+
+```bash
+make CC=gcc LDLIBS='-lnsl -lrt -lsocket'
+```
+
+#### OpenBSD
+
+For dual-stack (IPv4 and IPv6), run two instances due to platform limitations. See `util/openbsd/README.md` for details.
+
+## Installation Tutorial
+
+### 1. Preparation
+
+First, move your real SSH server to a different port:
+
+```bash
+# Backup current SSH configuration
+sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+
+# Edit SSH configuration
 sudo nano /etc/ssh/sshd_config
-# Change: Port 2222
+# Change: Port 2222 (or another port of your choice)
+
+# Update firewall
+sudo ufw allow 2222/tcp
 
 # Restart SSH
 sudo systemctl restart sshd
-
-# Test new port before continuing!
-ssh user@your-server -p 2222
 ```
 
-### Firewall Rules
+**⚠️ WARNING**: Before proceeding, verify you can connect on the new port:
 
 ```bash
-# Allow management SSH
-sudo ufw allow 2222/tcp comment "SSH Management"
-
-# Allow SSHoney tarpit
-sudo ufw allow 22/tcp comment "SSHoney Tarpit"
-
-# Enable firewall
-sudo ufw enable
+ssh username@your_server_ip -p 2222
 ```
 
-### Hardening Checklist
-
-- ✅ Run SSHoney as non-root user
-- ✅ Use systemd security restrictions
-- ✅ Implement proper logging and monitoring
-- ✅ Regular security updates
-- ✅ Network segmentation if possible
-- ✅ Rate limiting for legitimate services
-
-## 🚀 Deployment Architectures
-
-### Single Server
-
-```
-Internet → [Port 22: SSHoney] [Port 2222: Real SSH]
-```
-
-### Load Balanced
-
-```
-Internet → Load Balancer → Multiple SSHoney Instances
-         ↘ [Port 2222: Management SSH]
-```
-
-### Kubernetes Cluster
-
-```
-Internet → Ingress → SSHoney Pods (Auto-scaling)
-         → Monitoring Stack (Prometheus/Grafana)
-         → Log Aggregation (ELK Stack)
-```
-
-## 📈 Performance Tuning
-
-### System Limits
+### 2. Installing SSHoney
 
 ```bash
-# Increase file descriptor limits
-echo "sshoney soft nofile 65536" >> /etc/security/limits.conf
-echo "sshoney hard nofile 65536" >> /etc/security/limits.conf
-
-# Kernel network tuning
-echo "net.core.somaxconn = 65536" >> /etc/sysctl.conf
-echo "net.ipv4.tcp_max_syn_backlog = 65536" >> /etc/sysctl.conf
-sysctl -p
-```
-
-### Memory Optimization
-
-```bash
-# Configure swappiness for better performance
-echo "vm.swappiness = 10" >> /etc/sysctl.conf
-
-# Optimize memory overcommit
-echo "vm.overcommit_memory = 1" >> /etc/sysctl.conf
-```
-
-## 🔍 Threat Intelligence
-
-SSHoney includes advanced threat intelligence capabilities:
-
-### Automatic IP Enrichment
-
-- **GeoIP Location**: Country, city, ASN information
-- **Reputation Scoring**: Multi-source threat scoring
-- **Category Classification**: Attack type categorization
-- **Historical Tracking**: Connection patterns over time
-
-### Supported Sources
-
-- **VirusTotal**: Malware and URL analysis
-- **AbuseIPDB**: Community-driven IP reputation
-- **GreyNoise**: Internet scan detection
-- **Custom Sources**: Extensible API integration
-
-### Export Formats
-
-```bash
-# JSON format
-./threat_intel.py --export json
-
-# CSV for spreadsheet analysis
-./threat_intel.py --export csv
-
-# STIX 2.1 for threat intelligence platforms
-./threat_intel.py --export stix
-```
-
-## 🔄 Maintenance
-
-### Log Rotation
-
-Logs are automatically rotated using logrotate:
-
-```bash
-# Manual rotation
-sudo logrotate -f /etc/logrotate.d/sshoney
-
-# Check rotation status
-sudo logrotate -d /etc/logrotate.d/sshoney
-```
-
-### Updates
-
-```bash
-# Check for updates
-git fetch
-git diff HEAD origin/main
-
-# Update with zero downtime
-sudo systemctl stop sshoney
-make install
-sudo systemctl start sshoney
-```
-
-### Backup
-
-```bash
-# Backup configuration and data
-tar -czf sshoney-backup-$(date +%Y%m%d).tar.gz \
-    /etc/sshoney/ \
-    /var/lib/sshoney/ \
-    /var/log/sshoney/
-```
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-#### SSHoney won't start on port 22
-
-```bash
-# Check if another service is using port 22
-sudo netstat -tlnp | grep :22
-sudo lsof -i :22
-
-# Check systemd service status
-sudo systemctl status sshoney
-sudo journalctl -u sshoney -f
-```
-
-#### High memory usage
-
-```bash
-# Check connection count
-sudo netstat -an | grep :22 | wc -l
-
-# Adjust MaxClients in config
-sudo nano /etc/sshoney/config
-
-# Restart service
-sudo systemctl restart sshoney
-```
-
-#### No threat intelligence data
-
-```bash
-# Check API keys
-./threat_intel.py --config /etc/sshoney/threat_intel.json --verbose
-
-# Test individual APIs
-curl -H "X-API-KEY: your_key" "https://api.abuseipdb.com/api/v2/check?ipAddress=1.1.1.1"
-```
-
-### Debug Mode
-
-```bash
-# Run in debug mode
-sudo -u sshoney /usr/local/bin/sshoney -f /etc/sshoney/config -v -v
-
-# Enable debug logging
-sed -i 's/LogLevel 1/LogLevel 2/' /etc/sshoney/config
-sudo systemctl restart sshoney
-```
-
-## 🤝 Contributing
-
-### Development Setup
-
-```bash
-git clone https://github.com/your-repo/sshoney.git
+# Clone repository
+git clone https://github.com/soulwax/sshoney
 cd sshoney
 
-# Install development dependencies
-sudo apt install build-essential cppcheck clang-tidy valgrind
+# Install build dependencies
+sudo apt install build-essential
 
-# Run tests
-make test
+# Build
+make
 
-# Run static analysis
-make lint
-make analyze
+# Test run
+sudo ./sshoney -v -p 22
 ```
 
-### Submitting Changes
+### 3. Configuring as a Service
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Run the test suite
-6. Submit a pull request
+```bash
+# Install binary
+sudo mv ./sshoney /usr/local/bin/
 
-### Code Standards
+# Install service file
+sudo cp util/sshoney.service /etc/systemd/system/
 
-- Follow C99 standard
-- Use security-focused compiler flags
-- Include comprehensive error handling
-- Add appropriate logging
-- Update documentation
+# Configure for privileged ports
+sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/sshoney
 
-## 📚 Documentation
+# Create configuration
+sudo mkdir /etc/sshoney
+echo "Port 22" | sudo tee /etc/sshoney/config
 
-- **[Installation Guide](docs/installation.md)** - Detailed installation instructions
-- **[Configuration Reference](docs/configuration.md)** - Complete configuration options
-- **[Deployment Guide](docs/deployment.md)** - Production deployment best practices
-- **[Monitoring Setup](docs/monitoring.md)** - Monitoring and alerting configuration
-- **[Threat Intelligence](docs/threat-intelligence.md)** - TI integration guide
-- **[API Reference](docs/api.md)** - REST API documentation
-- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+# Enable and start service
+sudo systemctl --now enable sshoney
+```
 
-## 📊 Statistics
+### 4. Monitoring
 
-### Global Usage
+View logs:
 
-- **500+** Production deployments
-- **1M+** Malicious connections trapped daily
-- **99.9%** Uptime across deployments
-- **50+** Countries using SSHoney
+```bash
+# If using systemd
+sudo journalctl -u sshoney -f
 
-### Performance Benchmarks
+# Get statistics
+sudo kill -USR1 $(pgrep sshoney)
+```
 
-- **10,000+** Concurrent connections per instance
-- **<1%** CPU usage under normal load
-- **<50MB** Memory usage baseline
-- **24/7** Continuous operation capability
+Monitor active connections:
 
-## 🏆 Recognition
+```bash
+# Watch connection count
+watch -n 1 'sudo journalctl -u sshoney | grep ACCEPT | tail -20'
+```
 
-- Featured in **SANS Internet Storm Center**
-- Mentioned in **Awesome Honeypots** collection
-- Used by **major cloud providers** for research
-- **CVE-2023-XXXX** - Helped discover SSH vulnerabilities
+## Docker Deployment
 
-## 📄 License
+Build and run with Docker:
 
-This software is released into the **public domain**. See [UNLICENSE](UNLICENSE) for details.
+```bash
+docker build -t sshoney .
+docker run -d --name sshoney -p 22:2222 sshoney -v
+```
 
-## 🙏 Acknowledgments
+Or using docker-compose:
 
-- Original SSHoney concept and implementation
-- Security research community contributions
-- Cloud-native ecosystem projects
-- Open source monitoring tools
+```yaml
+version: '3'
+services:
+  sshoney:
+    build: .
+    ports:
+      - "22:2222"
+    restart: unless-stopped
+    command: ["-v", "-m", "10000"]
+```
 
-## 📞 Support
+## Security Considerations
 
-- **Issues**: [GitHub Issues](https://github.com/your-repo/sshoney/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-repo/sshoney/discussions)
-- **Security**: <security@yourcompany.com>
-- **Documentation**: [Wiki](https://github.com/your-repo/sshoney/wiki)
+- SSHoney creates no security vulnerabilities as it never performs authentication
+- No cryptographic operations are performed
+- Minimal resource usage prevents DoS attacks
+- Consider rate limiting at the firewall level for additional protection
 
----
+## Contributing
 
-**⚠️ Important Security Notice**: Always test SSH access on the new management port before deploying SSHoney on port 22. Lock yourself out at your own risk!
+SSHoney is released into the public domain. Feel free to fork, modify, and redistribute as needed.
+
+## References
+
+- [Original blog post about SSH tarpits][np]
+- [SSH RFC 4253](https://tools.ietf.org/html/rfc4253)
+
+[np]: https://nullprogram.com/blog/2019/03/22/
+
+## Conclusion
+
+SSHoney is an effective tool for wasting attackers' time and resources. The v1.2 enhancements make it even more convincing and efficient, capable of handling thousands of simultaneous connections while using minimal server resources. After installation, watch your logs fill with trapped bots while your real SSH server remains secure on an alternate port.
