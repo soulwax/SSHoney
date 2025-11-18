@@ -28,8 +28,11 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <syslog.h>
+#include <inttypes.h>
 
+#ifndef SSHONEY_VERSION
 #define SSHONEY_VERSION 1.2
+#endif
 
 #define DEFAULT_PORT 2222
 #define DEFAULT_DELAY 10000 /* milliseconds */
@@ -97,8 +100,8 @@ struct config {
 /* Log levels */
 enum loglevel {
     LOG_NONE,
-    LOG_INFO,
-    LOG_DEBUG
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_DEBUG
 };
 
 /* Global state */
@@ -151,7 +154,7 @@ static void log_stdio(enum loglevel level, const char *format, ...) {
     char timestamp[64];
     struct tm tm;
     strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", gmtime_r(&t, &tm));
-    printf("%s.%03lluZ ", timestamp, now % 1000);
+    printf("%s.%03" PRIu64 "Z ", timestamp, now % 1000);
     
     va_list ap;
     va_start(ap, format);
@@ -164,7 +167,7 @@ static void log_stdio(enum loglevel level, const char *format, ...) {
 }
 
 static void log_syslog(enum loglevel level, const char *format, ...) {
-    static const int prio_map[] = {LOG_NOTICE, LOG_INFO, LOG_DEBUG};
+    static const int prio_map[] = {LOG_NOTICE, LOG_INFO, LOG_DEBUG}; /* syslog constants */
     
     if (g_loglevel < level) return;
     
@@ -250,8 +253,8 @@ static void client_destroy(struct client *client) {
     
     uint64_t duration = get_time_ms() - client->connect_time;
     
-    g_logfunc(LOG_INFO, 
-             "CLOSE host=%s port=%d fd=%d time=%llu.%03llu bytes=%llu lines=%u",
+    g_logfunc(LOG_LEVEL_INFO, 
+             "CLOSE host=%s port=%d fd=%d time=%" PRIu64 ".%03" PRIu64 " bytes=%" PRIu64 " lines=%u",
              client->ipaddr, client->port, client->fd,
              duration / 1000, duration % 1000,
              client->bytes_sent, client->lines_sent);
@@ -349,9 +352,9 @@ static void log_statistics(struct client_queue *queue) {
         active_time += now - c->connect_time;
     }
     
-    g_logfunc(LOG_INFO, 
-             "STATS uptime=%llus connects=%llu disconnects=%llu "
-             "active=%d peak=%llu bytes=%llu avg_time=%llums",
+    g_logfunc(LOG_LEVEL_INFO, 
+             "STATS uptime=%" PRIu64 "s connects=%" PRIu64 " disconnects=%" PRIu64 " "
+             "active=%d peak=%" PRIu64 " bytes=%" PRIu64 " avg_time=%" PRIu64 "ms",
              uptime, g_stats.connects, g_stats.disconnects,
              queue->count, g_stats.peak_clients, g_stats.bytes_sent,
              g_stats.disconnects ? g_stats.total_time_ms / g_stats.disconnects : 0);
@@ -362,14 +365,16 @@ static int create_server(const struct config *cfg) {
     int fd = socket(cfg->bind_family == AF_UNSPEC ? AF_INET6 : cfg->bind_family, 
                    SOCK_STREAM, 0);
     if (fd == -1) {
-        g_logfunc(LOG_INFO, "socket() failed: %s", strerror(errno));
+        g_logfunc(LOG_LEVEL_INFO, "socket() failed: %s", strerror(errno));
         return -1;
     }
     
     /* Set socket options */
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#ifdef SO_REUSEPORT
     setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt));
+#endif
     
 #ifndef __OpenBSD__
     if (cfg->bind_family == AF_INET6 || cfg->bind_family == AF_UNSPEC) {
@@ -386,7 +391,7 @@ static int create_server(const struct config *cfg) {
             .sin_addr.s_addr = INADDR_ANY
         };
         if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-            g_logfunc(LOG_INFO, "bind() failed: %s", strerror(errno));
+            g_logfunc(LOG_LEVEL_INFO, "bind() failed: %s", strerror(errno));
             close(fd);
             return -1;
         }
@@ -397,19 +402,19 @@ static int create_server(const struct config *cfg) {
             .sin6_addr = in6addr_any
         };
         if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-            g_logfunc(LOG_INFO, "bind() failed: %s", strerror(errno));
+            g_logfunc(LOG_LEVEL_INFO, "bind() failed: %s", strerror(errno));
             close(fd);
             return -1;
         }
     }
     
     if (listen(fd, SOMAXCONN) == -1) {
-        g_logfunc(LOG_INFO, "listen() failed: %s", strerror(errno));
+        g_logfunc(LOG_LEVEL_INFO, "listen() failed: %s", strerror(errno));
         close(fd);
         return -1;
     }
     
-    g_logfunc(LOG_INFO, "Server listening on port %d", cfg->port);
+    g_logfunc(LOG_LEVEL_INFO, "Server listening on port %d", cfg->port);
     return fd;
 }
 
@@ -420,7 +425,7 @@ static struct client *send_line(struct client *client, const struct config *cfg,
     int len = generate_banner_line(buffer, cfg->max_line_length, rng);
     
     ssize_t sent = write(client->fd, buffer, len);
-    g_logfunc(LOG_DEBUG, "write(%d, %d) = %zd", client->fd, len, sent);
+    g_logfunc(LOG_LEVEL_DEBUG, "write(%d, %d) = %zd", client->fd, len, sent);
     
     if (sent == -1) {
         if (errno == EINTR) {
@@ -502,7 +507,7 @@ int main(int argc, char **argv) {
             g_logfunc = log_syslog;
             break;
         case 'v':
-            if (g_loglevel < LOG_DEBUG) g_loglevel++;
+            if (g_loglevel < LOG_LEVEL_DEBUG) g_loglevel++;
             break;
         case 'V':
             printf("SSHoney %s\n", XSTR(SSHONEY_VERSION));
@@ -541,12 +546,12 @@ int main(int argc, char **argv) {
     struct client_queue queue;
     queue_init(&queue);
     
-    g_logfunc(LOG_INFO, "SSHoney %s started", XSTR(SSHONEY_VERSION));
+    g_logfunc(LOG_LEVEL_INFO, "SSHoney %s started", XSTR(SSHONEY_VERSION));
     
     /* Main event loop */
     while (g_running) {
         if (g_reload) {
-            g_logfunc(LOG_INFO, "Configuration reload requested");
+            g_logfunc(LOG_LEVEL_INFO, "Configuration reload requested");
             g_reload = 0;
         }
         
@@ -596,7 +601,7 @@ int main(int argc, char **argv) {
         
         if (poll_result == -1) {
             if (errno == EINTR) continue;
-            g_logfunc(LOG_INFO, "poll() failed: %s", strerror(errno));
+            g_logfunc(LOG_LEVEL_INFO, "poll() failed: %s", strerror(errno));
             break;
         }
         
@@ -605,7 +610,7 @@ int main(int argc, char **argv) {
             int client_fd = accept(server_fd, NULL, NULL);
             if (client_fd == -1) {
                 if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                    g_logfunc(LOG_INFO, "accept() failed: %s", strerror(errno));
+                    g_logfunc(LOG_LEVEL_INFO, "accept() failed: %s", strerror(errno));
                 }
                 continue;
             }
@@ -622,18 +627,18 @@ int main(int argc, char **argv) {
                 queue_push(&queue, client);
                 g_stats.connects++;
                 
-                g_logfunc(LOG_INFO, "ACCEPT host=%s port=%d fd=%d clients=%d/%d",
+                g_logfunc(LOG_LEVEL_INFO, "ACCEPT host=%s port=%d fd=%d clients=%d/%d",
                          client->ipaddr, client->port, client->fd,
                          queue.count, config.max_clients);
             } else {
-                g_logfunc(LOG_INFO, "Failed to create client structure");
+                g_logfunc(LOG_LEVEL_INFO, "Failed to create client structure");
                 close(client_fd);
             }
         }
     }
     
     /* Cleanup */
-    g_logfunc(LOG_INFO, "Shutting down...");
+    g_logfunc(LOG_LEVEL_INFO, "Shutting down...");
     queue_destroy(&queue);
     close(server_fd);
     log_statistics(&queue);
