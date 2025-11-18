@@ -22,6 +22,6 @@ chown root:root /etc/sshoney/config
 chmod 644 /etc/sshoney/config
 
 # Reload systemd and enable service
-sudo systemctl daemon-reload
-sudo systemctl --now enable sshoney
+systemctl daemon-reload
+systemctl --now enable sshoney
 
