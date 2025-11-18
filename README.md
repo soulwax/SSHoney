@@ -49,7 +49,7 @@ By default no log messages are produced. The first `-v` enables basic logging an
 
 When sending SIGUSR1, SSHoney now provides enhanced statistics:
 
-```
+```sh
 STATS uptime=3600s connects=142 disconnects=89 active=53 peak=67 bytes=1048576 avg_time=24532ms
 ```
 
@@ -57,7 +57,7 @@ STATS uptime=3600s connects=142 disconnects=89 active=53 peak=67 bytes=1048576 a
 
 The configuration file has similar syntax to OpenSSH. The enhanced version supports additional options:
 
-```
+```sh
 # The port on which to listen for new SSH connections.
 Port 2222
 
