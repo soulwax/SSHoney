@@ -16,6 +16,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -29,6 +30,7 @@
 #include <netinet/tcp.h>
 #include <syslog.h>
 #include <inttypes.h>
+#include <ctype.h>
 
 #ifndef SSHONEY_VERSION
 #define SSHONEY_VERSION 1.2
@@ -325,6 +327,67 @@ static void queue_destroy(struct client_queue *q) {
     .recv_buffer_size = 1 \
 }
 
+/* Parse configuration file */
+static int parse_config_file(const char *filename, struct config *cfg) {
+    FILE *f = fopen(filename, "r");
+    if (!f) {
+        return -1; /* File doesn't exist or can't be read - not an error */
+    }
+    
+    char line[256];
+    int line_num = 0;
+    
+    while (fgets(line, sizeof(line), f)) {
+        line_num++;
+        
+        /* Skip comments and empty lines */
+        char *p = line;
+        while (isspace((unsigned char)*p)) p++;
+        if (*p == '#' || *p == '\0') continue;
+        
+        /* Parse key-value pairs */
+        char key[64], value[128];
+        if (sscanf(p, "%63s %127s", key, value) == 2) {
+            if (strcasecmp(key, "Port") == 0) {
+                cfg->port = atoi(value);
+            } else if (strcasecmp(key, "Delay") == 0) {
+                cfg->delay = atoi(value);
+            } else if (strcasecmp(key, "MinDelay") == 0) {
+                cfg->min_delay = atoi(value);
+            } else if (strcasecmp(key, "MaxDelay") == 0) {
+                cfg->max_delay = atoi(value);
+            } else if (strcasecmp(key, "MaxLineLength") == 0) {
+                cfg->max_line_length = atoi(value);
+            } else if (strcasecmp(key, "MaxClients") == 0) {
+                cfg->max_clients = atoi(value);
+            } else if (strcasecmp(key, "BindFamily") == 0) {
+                int family = atoi(value);
+                if (family == 4) cfg->bind_family = AF_INET;
+                else if (family == 6) cfg->bind_family = AF_INET6;
+                else cfg->bind_family = AF_UNSPEC;
+            } else if (strcasecmp(key, "RandomizeDelay") == 0) {
+                cfg->randomize_delay = (strcasecmp(value, "yes") == 0 || 
+                                       strcasecmp(value, "true") == 0 ||
+                                       strcmp(value, "1") == 0);
+            } else if (strcasecmp(key, "TcpNodelay") == 0) {
+                cfg->tcp_nodelay = (strcasecmp(value, "yes") == 0 || 
+                                   strcasecmp(value, "true") == 0 ||
+                                   strcmp(value, "1") == 0);
+            } else if (strcasecmp(key, "RecvBufferSize") == 0) {
+                cfg->recv_buffer_size = atoi(value);
+            } else if (strcasecmp(key, "LogLevel") == 0) {
+                int level = atoi(value);
+                if (level >= 0 && level <= 2) {
+                    g_loglevel = (enum loglevel)level;
+                }
+            }
+        }
+    }
+    
+    fclose(f);
+    return 0;
+}
+
 /* Signal handlers */
 static void signal_term(int sig) {
     (void)sig;
@@ -489,6 +552,8 @@ int main(int argc, char **argv) {
             break;
         case 'f':
             config_file = optarg;
+            /* Parse config file when -f is encountered */
+            parse_config_file(config_file, &config);
             break;
         case 'h':
             print_usage(stdout);
@@ -516,6 +581,11 @@ int main(int argc, char **argv) {
             print_usage(stderr);
             return 1;
         }
+    }
+    
+    /* Parse default config file if -f was not specified */
+    if (config_file == DEFAULT_CONFIG_FILE) {
+        parse_config_file(config_file, &config);
     }
     
     /* Initialize logging */

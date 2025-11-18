@@ -45,7 +45,9 @@ install: $(TARGET)
 	install -d $(DESTDIR)$(MANDIR)
 	install -m 644 $(MANPAGE) $(DESTDIR)$(MANDIR)/
 	install -d $(DESTDIR)$(SYSCONFDIR)/sshoney
-	install -m 644 config.example $(DESTDIR)$(SYSCONFDIR)/sshoney/
+	@if [ -f config.example ]; then \
+		install -m 644 config.example $(DESTDIR)$(SYSCONFDIR)/sshoney/; \
+	fi
 
 install-service: install
 	install -d $(DESTDIR)$(SYSTEMDDIR)

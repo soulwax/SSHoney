@@ -199,14 +199,24 @@ sudo mv ./sshoney /usr/local/bin/
 # Install service file
 sudo cp util/sshoney.service /etc/systemd/system/
 
+# Create sshoney user (required by service)
+sudo useradd -r -s /bin/false -d /var/lib/sshoney sshoney
+
+# Create directories
+sudo mkdir -p /var/lib/sshoney
+sudo chown sshoney:sshoney /var/lib/sshoney
+
 # Configure for privileged ports
 sudo setcap 'cap_net_bind_service=+ep' /usr/local/bin/sshoney
 
 # Create configuration
-sudo mkdir /etc/sshoney
+sudo mkdir -p /etc/sshoney
 echo "Port 22" | sudo tee /etc/sshoney/config
+sudo chown root:root /etc/sshoney/config
+sudo chmod 644 /etc/sshoney/config
 
-# Enable and start service
+# Reload systemd and enable service
+sudo systemctl daemon-reload
 sudo systemctl --now enable sshoney
 ```
 
