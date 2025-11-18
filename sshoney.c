@@ -509,7 +509,13 @@ static struct client *send_line(struct client *client, const struct config *cfg,
     int len = generate_banner_line(buffer, cfg->max_line_length, rng, first_line);
     
     ssize_t sent = write(client->fd, buffer, len);
-    g_logfunc(LOG_LEVEL_DEBUG, "write(%d, %d) = %zd", client->fd, len, sent);
+    
+    /* Log banner lines being sent (truncate for readability) */
+    char log_buf[80];
+    int log_len = len < 70 ? len - 2 : 70; /* Remove \r\n */
+    memcpy(log_buf, buffer, log_len);
+    log_buf[log_len] = '\0';
+    g_logfunc(LOG_LEVEL_DEBUG, "write(%d, %d) = %zd: \"%s\"", client->fd, len, sent, log_buf);
     
     if (sent == -1) {
         if (errno == EINTR) {
