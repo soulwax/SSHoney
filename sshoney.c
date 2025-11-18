@@ -185,36 +185,52 @@ static void log_syslog(enum loglevel level, const char *format, ...) {
     errno = saved_errno;
 }
 
-/* Enhanced banner generation */
-static int generate_banner_line(char *buffer, int max_len, struct rng_state *rng) {
+/* Enhanced banner generation - SSH tarpit approach */
+static int generate_banner_line(char *buffer, int max_len, struct rng_state *rng, bool first_line) {
+    (void)first_line; /* All lines are the same - just random data */
+    
+    /* RFC 4253: "The server MAY send other lines of data before sending the version string."
+     * Lines before the version string should start with any byte except "S".
+     * We send endless random lines that look like they're building up to SSH,
+     * but we never actually send the "SSH-2.0-..." line.
+     * 
+     * This keeps the client waiting forever in the pre-authentication banner phase.
+     */
+    
     int len = 8 + (rng_next(rng) % (max_len - 10));
+    if (len < 10) len = 10;
+    if (len > max_len - 2) len = max_len - 2;
     
-    /* Generate more realistic SSH-like banner content */
-    const char *prefixes[] = {
-        "SSH-2.0-OpenSSH_", "SSH-2.0-libssh_", "SSH-1.99-Cisco_",
-        "SSH-2.0-PuTTY_", "SSH-2.0-WinSCP_", "SSH-2.0-paramiko_"
-    };
-    
-    int prefix_idx = rng_next(rng) % (sizeof(prefixes) / sizeof(prefixes[0]));
-    int prefix_len = snprintf(buffer, max_len - 2, "%s%d.%d", 
-                             prefixes[prefix_idx],
-                             rng_next(rng) % 9 + 1,
-                             rng_next(rng) % 10);
-    
-    /* Fill remaining space with random characters */
-    for (int i = prefix_len; i < len - 2; i++) {
+    /* Generate random ASCII characters, avoiding 'S' at the start */
+    for (int i = 0; i < len; i++) {
         buffer[i] = 32 + (rng_next(rng) % 95);
     }
     
-    buffer[len - 2] = '\r';
-    buffer[len - 1] = '\n';
-    
-    /* Ensure we don't accidentally create valid SSH banners */
-    if (memcmp(buffer, "SSH-2.0-OpenSSH", 15) == 0) {
-        buffer[0] = 'X';
+    /* Ensure first character is NOT 'S' (to avoid looking like SSH version) */
+    if (buffer[0] == 'S') {
+        buffer[0] = 'R'; /* Change to something else */
     }
     
-    return len;
+    /* Make it look somewhat like system messages or banner text */
+    const char *prefixes[] = {
+        "Loading ", "Initializing ", "Connecting ", "Starting ",
+        "Preparing ", "Checking ", "Verifying ", "Configuring "
+    };
+    
+    /* Sometimes use a realistic prefix */
+    if (rng_next(rng) % 3 == 0) {
+        int prefix_idx = rng_next(rng) % (sizeof(prefixes) / sizeof(prefixes[0]));
+        int prefix_len = strlen(prefixes[prefix_idx]);
+        if (prefix_len < len - 2) {
+            memcpy(buffer, prefixes[prefix_idx], prefix_len);
+        }
+    }
+    
+    /* Add CRLF termination */
+    buffer[len] = '\r';
+    buffer[len + 1] = '\n';
+    
+    return len + 2;
 }
 
 /* Client management */
@@ -331,7 +347,11 @@ static void queue_destroy(struct client_queue *q) {
 static int parse_config_file(const char *filename, struct config *cfg) {
     FILE *f = fopen(filename, "r");
     if (!f) {
-        return -1; /* File doesn't exist or can't be read - not an error */
+        /* File doesn't exist or can't be read - log but don't fail */
+        /* Note: g_logfunc might not be initialized yet, so we use fprintf */
+        fprintf(stderr, "Warning: Config file '%s' not found or not readable: %s\n", 
+                filename, strerror(errno));
+        return -1;
     }
     
     char line[256];
@@ -485,7 +505,8 @@ static int create_server(const struct config *cfg) {
 static struct client *send_line(struct client *client, const struct config *cfg, 
                                struct rng_state *rng) {
     char buffer[BANNER_BUFFER_SIZE];
-    int len = generate_banner_line(buffer, cfg->max_line_length, rng);
+    bool first_line = (client->lines_sent == 0);
+    int len = generate_banner_line(buffer, cfg->max_line_length, rng, first_line);
     
     ssize_t sent = write(client->fd, buffer, len);
     g_logfunc(LOG_LEVEL_DEBUG, "write(%d, %d) = %zd", client->fd, len, sent);
@@ -584,7 +605,9 @@ int main(int argc, char **argv) {
     }
     
     /* Parse default config file if -f was not specified */
-    if (config_file == DEFAULT_CONFIG_FILE) {
+    /* Note: We check if config_file still points to DEFAULT_CONFIG_FILE by comparing strings */
+    /* This handles the case where -f was not used */
+    if (strcmp(config_file, DEFAULT_CONFIG_FILE) == 0) {
         parse_config_file(config_file, &config);
     }
     
@@ -593,6 +616,12 @@ int main(int argc, char **argv) {
         openlog("sshoney", LOG_PID, LOG_DAEMON);
     } else {
         setvbuf(stdout, NULL, _IOLBF, 0);
+    }
+    
+    /* Log configuration after parsing */
+    if (g_loglevel >= LOG_LEVEL_INFO) {
+        g_logfunc(LOG_LEVEL_INFO, "Configuration: port=%d delay=%d max_clients=%d bind_family=%d",
+                 config.port, config.delay, config.max_clients, config.bind_family);
     }
     
     /* Install signal handlers */
